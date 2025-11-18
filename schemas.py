@@ -1,48 +1,66 @@
 """
-Database Schemas
+Database Schemas for Agricompass
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
+Each Pydantic model represents a collection in MongoDB.
+Collection name is the lowercase of the class name.
 
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Example: class User -> collection "user"
 """
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field, EmailStr
 
-from pydantic import BaseModel, Field
-from typing import Optional
-
-# Example schemas (replace with your own):
-
+# Core users
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
     name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    email: EmailStr = Field(..., description="Email address")
+    password_hash: str = Field(..., description="Password hash (server-side)")
+    role: Literal["farmer", "buyer", "officer", "admin"] = Field("farmer", description="User role")
+    phone: Optional[str] = Field(None, description="Phone number")
+    region: Optional[str] = Field(None, description="Region/Location")
+    verified: bool = Field(False, description="Whether profile is verified by officer/admin")
+    token: Optional[str] = Field(None, description="Simple auth token for demo sessions")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+# Produce listings posted by farmers
+class Listing(BaseModel):
+    farmer_id: str = Field(..., description="Owner user _id as string")
+    title: str = Field(..., description="Produce name, e.g., Maize")
+    category: Literal["grains", "vegetables", "fruits", "legumes", "roots", "other"] = Field("other")
+    description: Optional[str] = Field(None)
+    unit: Literal["kg", "ton", "bag", "crate", "unit"] = Field("kg")
+    quantity_available: float = Field(..., ge=0)
+    unit_price: float = Field(..., ge=0)
+    region: Optional[str] = Field(None)
+    quality_grade: Optional[Literal["A", "B", "C"]] = None
+    status: Literal["active", "inactive", "sold"] = Field("active")
 
-# Add your own schemas here:
-# --------------------------------------------------
+# Orders placed by buyers
+class OrderItem(BaseModel):
+    listing_id: str
+    quantity: float = Field(..., gt=0)
+    unit_price: float = Field(..., ge=0)
+    title: str
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class Order(BaseModel):
+    buyer_id: str
+    items: List[OrderItem]
+    total_amount: float = Field(..., ge=0)
+    status: Literal["pending", "confirmed", "cancelled", "completed"] = Field("pending")
+    delivery_terms: Optional[str] = None
+    payment_method: Optional[str] = None
+
+# Field officer reports
+class FieldReport(BaseModel):
+    officer_id: str
+    farmer_id: str
+    listing_id: Optional[str] = None
+    notes: str
+    quality_grade: Optional[Literal["A", "B", "C"]] = None
+    harvest_ready: Optional[bool] = None
+
+# Simple message entity (for future chat/communication)
+class Message(BaseModel):
+    sender_id: str
+    recipient_id: str
+    body: str
+    related_order_id: Optional[str] = None
+
